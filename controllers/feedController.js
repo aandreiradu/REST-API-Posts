@@ -4,10 +4,24 @@ const path = require("path");
 const { validationResult } = require("express-validator");
 const { deleteFile } = require("../utils/files/removeFile");
 const Post = require("../models/Post");
+const Users = require("../models/User");
+const User = require("../models/User");
 
 const getPosts = async (req, res, next) => {
+  const currentPage = req.query.page || 1;
+  const perPage = process.env.POSTS_PER_PAGE;
+
+  console.log("perPage", perPage);
+  console.log("currentPage", currentPage);
+
   try {
-    const posts = await Post.find().exec();
+    let postsCount = await Post.countDocuments().exec();
+    console.log("postsCount", postsCount);
+
+    const posts = await Post.find()
+      .skip((currentPage - 1) * perPage)
+      .limit(perPage)
+      .exec();
     console.log("@@@getPosts posts result", posts);
 
     if (!posts) {
@@ -19,6 +33,7 @@ const getPosts = async (req, res, next) => {
     return res.status(200).json({
       message: "Fetched posts successfully",
       posts,
+      totalItems: postsCount,
     });
   } catch (error) {
     console.log("@@@ERROR getPosts controller", error);
@@ -57,19 +72,29 @@ const createPost = async (req, res, next) => {
       title,
       content,
       imageUrl: imageUrl,
-      creator: {
-        name: "Andrei Radu",
-      },
+      creator: req.userId,
     });
 
-    const responseSave = await post.save();
-    console.log("responseSave", responseSave);
+    if (post) {
+      // attach post to the user id;
+      const postCreator = await Users.findById(req.userId).exec(); // currently login user
+      postCreator.posts.push(post);
 
-    if (responseSave) {
-      return res.status(201).json({
-        message: "Post created successfully!",
-        post: responseSave,
-      });
+      await postCreator.save();
+      console.log("postCreator", postCreator);
+      const responseSave = await post.save();
+      console.log("responseSave", responseSave);
+      if (responseSave) {
+        console.log("return response ok");
+        return res.status(201).json({
+          message: "Post created successfully!",
+          post: post,
+          creator: {
+            _id: postCreator._id,
+            name: postCreator.name,
+          },
+        });
+      }
     }
   } catch (error) {
     console.log("@@@ERROR createPost", error);
@@ -148,7 +173,6 @@ const editPostById = async (req, res, next) => {
     return next(error);
   }
 
-  // valid data here => just update in the db;
   try {
     const postById = await Post.findById(postId).exec();
 
@@ -157,6 +181,14 @@ const editPostById = async (req, res, next) => {
         `No post found for the provided postId : ${postId}`
       );
       error.statusCode = 400;
+      return next(error);
+    }
+
+    // check if the logged user is the creator of the post
+    if (req.userId.toString() !== postById.creator.toString()) {
+      const error = new Error("Unauthorized! You cannot edit this post");
+      error.statusCode = 403;
+
       return next(error);
     }
 
@@ -218,6 +250,13 @@ const deletePostById = async (req, res, next) => {
       return next(error);
     }
 
+    // check if the user can delete this post
+    if (req.userId.toString() !== postToBeDeleted.creator.toString()) {
+      const error = new Error("Unauthorized! You cannot edit this post");
+      error.statusCode = 403;
+      return next(error);
+    }
+
     const imageToBeDeletedPath = postToBeDeleted.imageUrl;
     console.log("imageToBeDeletedPath", imageToBeDeletedPath);
 
@@ -228,9 +267,24 @@ const deletePostById = async (req, res, next) => {
 
     console.log("deleteResponse", deleteResponse);
 
-    return res.status(200).json({
-      message: "Product deleted successfully!",
-    });
+    if (deleteResponse) {
+      // clear the relation between user and post;
+      const loggedUser = await User.findById(req.userId).exec();
+      const updatedPosts = loggedUser.posts.filter((post) => {
+        console.log("post", post);
+        return post._id.toString() !== postId.toString();
+      });
+
+      // or remove using mongoose pull
+      // loggedUser.posts.pull(postId);
+
+      console.log("updatedPosts", updatedPosts);
+      loggedUser.posts = updatedPosts;
+      await loggedUser.save();
+      return res.status(200).json({
+        message: "Product deleted successfully!",
+      });
+    }
   } catch (error) {
     console.log("@@@ERROR deletePostById controller", error);
     if (!error.statusCode) {

@@ -2,10 +2,12 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const mongoose = require("mongoose");
-const feedRoutes = require("./routes/feedRoutes");
 const bodyParser = require("body-parser");
 const connectDB = require("./config/dbConnection");
 const multer = require("multer");
+
+const feedRoutes = require("./routes/feedRoutes");
+const authRoutes = require("./routes/authRoutes");
 
 // Server
 const app = express();
@@ -34,37 +36,37 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-app.use(express.static(path.join(__dirname, "public"))); //make public directory accessible
-app.use("/images", express.static(path.join(__dirname, "images"))); // make images directory accessible
-app.use(bodyParser.urlencoded({ extended: false })); // body parser middleware
-app.use(express.json()); // json parser middleware
+app.use(bodyParser.json()); // body parser middleware
 app.use(
   multer({ storage: fileStorage, fileFilter: fileFilter }).single("image")
 );
+app.use("/images", express.static(path.join(__dirname, "images"))); // make images directory accessible
+app.use(express.static(path.join(__dirname, "public"))); //make public directory accessible
+app.use(express.json()); // json parser middleware
 
 app.use((req, res, next) => {
-  console.log("a intrat pe aici");
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Method", "GET, POST, PUT, PATCH, DELETE");
   res.setHeader(
     "Access-Control-Allow-Methods",
-    "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+    "OPTIONS, GET, POST, PUT, PATCH, DELETE"
   );
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
   next();
 });
 
 app.use("/feed", feedRoutes);
+app.use("/auth", authRoutes);
 
 // custom error handler
 app.use((error, req, res, next) => {
   console.log("err middleware", error);
   const message = error.message;
   const statusCode = error.statusCode || 500;
+  const data = error.data || [];
 
   return res.status(statusCode).json({
     message,
+    data,
   });
 });
 

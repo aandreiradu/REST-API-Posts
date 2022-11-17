@@ -1,4 +1,5 @@
 const router = require("express").Router();
+const isAuth = require("../middleware/isAuth");
 const { body } = require("express-validator");
 const {
   getPosts,
@@ -9,10 +10,11 @@ const {
 } = require("../controllers/feedController");
 
 // /feed/post
-router.get("/posts", getPosts);
+router.get("/posts", isAuth, getPosts);
 
 router.post(
   "/posts",
+  isAuth,
   [
     body("title").trim().isLength({ min: 5 }),
     body("content").trim().isLength({ min: 5 }),
@@ -21,11 +23,12 @@ router.post(
 );
 
 // Get info about a single post
-router.get("/post/:postId", getPostById);
+router.get("/post/:postId", isAuth, getPostById);
 
 // Edit a single post
 router.put(
   "/post/:postId",
+  isAuth,
   [
     body("title").trim().isLength({ min: 5 }),
     body("content").trim().isLength({ min: 5 }),
@@ -34,6 +37,6 @@ router.put(
 );
 
 // Edit post by id
-router.delete("/post/:postId", deletePostById);
+router.delete("/post/:postId", isAuth, deletePostById);
 
 module.exports = router;
