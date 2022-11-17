@@ -21,6 +21,7 @@ const getPosts = async (req, res, next) => {
     const posts = await Post.find()
       .skip((currentPage - 1) * perPage)
       .limit(perPage)
+      .populate("creator")
       .exec();
     console.log("@@@getPosts posts result", posts);
 
@@ -116,7 +117,7 @@ const getPostById = async (req, res, next) => {
   }
 
   try {
-    const findPostById = await Post.findById(postId).exec();
+    const findPostById = await Post.findById(postId).populate("creator").exec();
 
     console.log("findPostById", findPostById);
 
